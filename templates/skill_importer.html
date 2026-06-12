@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+
+{% block title %}Skill Importer — Agent Manager{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto space-y-8 pb-12">
+
+  {# ── Hero ── #}
+  <section class="relative overflow-hidden rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 p-6 sm:p-8 shadow-sleek-lg text-white">
+    <div class="pointer-events-none absolute -right-16 -top-16 h-64 w-64 rounded-full bg-sky-500/20 blur-3xl"></div>
+    <div class="pointer-events-none absolute -left-10 bottom-0 h-48 w-48 rounded-full bg-violet-500/15 blur-3xl"></div>
+    <div class="relative z-10">
+      <p class="text-[11px] font-semibold uppercase tracking-[0.2em] text-sky-300/90">Machine-to-machine import</p>
+      <h1 class="mt-2 text-2xl sm:text-3xl font-semibold tracking-tight">Skill Importer</h1>
+      <p class="mt-3 max-w-3xl text-sm leading-relaxed text-slate-300">
+        Push Agent <span class="text-sky-200 font-medium">skills</span> into an existing agent as JSON from any
+        external system. Mint an <span class="text-violet-200 font-medium">X-API-Key</span> below, then
+        <span class="font-mono text-emerald-200">POST</span> to the import endpoint with an
+        <span class="text-emerald-200 font-medium">agent_alias</span> and one or more skills.
+      </p>
+    </div>
+  </section>
+
+  {# ── Freshly created key (shown once) ── #}
+  {% if new_raw_key %}
+  <section class="rounded-xl border border-emerald-300 bg-emerald-50 p-5 shadow-sleek">
+    <div class="flex items-start gap-3">
+      <span class="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+      </span>
+      <div class="min-w-0 flex-1">
+        <h2 class="text-sm font-semibold text-emerald-900">API key created — copy it now</h2>
+        <p class="mt-1 text-xs text-emerald-800">This is the only time the full key is shown. Store it somewhere safe.</p>
+        <div class="mt-3 flex items-center gap-2">
+          <code id="new-key" class="flex-1 truncate rounded-lg border border-emerald-300 bg-white px-3 py-2 font-mono text-sm text-slate-800">{{ new_raw_key }}</code>
+          <button type="button" data-copy="#new-key"
+                  class="copy-btn shrink-0 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700">Copy</button>
+        </div>
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
+  <div class="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+
+    {# ── Keys management ── #}
+    <section class="rounded-xl border border-slate-200 bg-white p-5 shadow-sleek">
+      <div class="flex items-center justify-between gap-3">
+        <h2 class="text-base font-semibold text-slate-900">API keys</h2>
+        <span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">{{ keys|length }} total</span>
+      </div>
+
+      <form method="post" action="/skill-importer/keys" class="mt-4 flex items-end gap-2">
+        <div class="flex-1">
+          <label class="block text-xs font-medium text-slate-600">Key name</label>
+          <input type="text" name="name" placeholder="e.g. CRM import worker"
+                 class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none" />
+        </div>
+        <button type="submit"
+                class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800">
+          Create key
+        </button>
+      </form>
+
+      <div class="mt-5 overflow-hidden rounded-lg border border-slate-200">
+        <table class="min-w-full divide-y divide-slate-200 text-sm">
+          <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+            <tr>
+              <th class="px-3 py-2 font-medium">Name</th>
+              <th class="px-3 py-2 font-medium">Prefix</th>
+              <th class="px-3 py-2 font-medium">Status</th>
+              <th class="px-3 py-2 font-medium">Last used</th>
+              <th class="px-3 py-2"></th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            {% for k in keys %}
+            <tr class="hover:bg-slate-50/60">
+              <td class="px-3 py-2 font-medium text-slate-800">{{ k.name }}</td>
+              <td class="px-3 py-2 font-mono text-xs text-slate-500">{{ k.key_prefix }}…</td>
+              <td class="px-3 py-2">
+                {% if k.is_active %}
+                <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>Active</span>
+                {% else %}
+                <span class="inline-flex items-center gap-1 rounded-full bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-600">Revoked</span>
+                {% endif %}
+              </td>
+              <td class="px-3 py-2 text-xs text-slate-500">{{ k.last_used_at.strftime('%Y-%m-%d %H:%M') if k.last_used_at else '—' }}</td>
+              <td class="px-3 py-2 text-right">
+                <div class="flex justify-end gap-1.5">
+                  {% if k.is_active %}
+                  <form method="post" action="/skill-importer/keys/{{ k.id }}/revoke">
+                    <button class="rounded-md border border-slate-300 px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100">Revoke</button>
+                  </form>
+                  {% endif %}
+                  <form method="post" action="/skill-importer/keys/{{ k.id }}/delete" onsubmit="return confirm('Delete this key permanently?');">
+                    <button class="rounded-md border border-rose-200 px-2 py-1 text-xs font-medium text-rose-600 hover:bg-rose-50">Delete</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5" class="px-3 py-6 text-center text-sm text-slate-400">No keys yet — create one above.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    {# ── Usage docs ── #}
+    <section class="rounded-xl border border-slate-200 bg-white p-5 shadow-sleek">
+      <h2 class="text-base font-semibold text-slate-900">How to import</h2>
+      <p class="mt-1 text-xs text-slate-500">Send a <span class="font-mono">POST</span> with your key in the <span class="font-mono">X-API-Key</span> header.</p>
+
+      <div class="mt-4 space-y-1">
+        <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">Endpoint</div>
+        <div class="flex items-center gap-2">
+          <code id="endpoint" class="flex-1 truncate rounded-lg bg-slate-900 px-3 py-2 font-mono text-xs text-sky-300">POST /api/skill-import/skills</code>
+          <button type="button" data-copy="#endpoint" class="copy-btn shrink-0 rounded-lg border border-slate-300 px-2.5 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100">Copy</button>
+        </div>
+      </div>
+
+      <div class="mt-4 space-y-1">
+        <div class="flex items-center justify-between">
+          <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">Example (curl)</div>
+          <button type="button" data-copy="#curl" class="copy-btn rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100">Copy</button>
+        </div>
+<pre id="curl" class="overflow-x-auto rounded-lg bg-slate-900 p-4 text-xs leading-relaxed text-slate-100"><code>curl -X POST {{ request.base_url }}api/skill-import/skills \
+  -H "X-API-Key: &lt;your-key&gt;" \
+  -H "Content-Type: application/json" \
+  -d '{
+  "agent_alias": "{{ example_alias }}",
+  "skills": [
+    {
+      "name": "Refund policy",
+      "description": "How to handle refund requests",
+      "content": "# Refunds\n...markdown body...",
+      "tags": "support,billing",
+      "status": "enabled"
+    }
+  ]
+}'</code></pre>
+      </div>
+
+      <dl class="mt-4 space-y-2 text-xs text-slate-600">
+        <div class="flex gap-2"><dt class="w-28 shrink-0 font-semibold text-slate-700">agent_alias</dt><dd>Required. Alias of the target agent.</dd></div>
+        <div class="flex gap-2"><dt class="w-28 shrink-0 font-semibold text-slate-700">name</dt><dd>Required per skill. Matches by name → update, else create.</dd></div>
+        <div class="flex gap-2"><dt class="w-28 shrink-0 font-semibold text-slate-700">description</dt><dd>Optional short summary.</dd></div>
+        <div class="flex gap-2"><dt class="w-28 shrink-0 font-semibold text-slate-700">content</dt><dd>Optional markdown body of the skill.</dd></div>
+        <div class="flex gap-2"><dt class="w-28 shrink-0 font-semibold text-slate-700">tags</dt><dd>Optional comma-separated tags.</dd></div>
+        <div class="flex gap-2"><dt class="w-28 shrink-0 font-semibold text-slate-700">status</dt><dd>Optional: <span class="font-mono">enabled</span> (default) or <span class="font-mono">disabled</span>.</dd></div>
+      </dl>
+
+      {% if agent_aliases %}
+      <p class="mt-4 text-xs text-slate-500">Available aliases: {% for a in agent_aliases[:8] %}<span class="font-mono text-slate-700">{{ a }}</span>{% if not loop.last %}, {% endif %}{% endfor %}{% if agent_aliases|length > 8 %} …{% endif %}</p>
+      {% endif %}
+    </section>
+  </div>
+
+  {# ── Recent imports ── #}
+  <section class="rounded-xl border border-slate-200 bg-white p-5 shadow-sleek">
+    <h2 class="text-base font-semibold text-slate-900">Recent imports</h2>
+    <div class="mt-4 overflow-hidden rounded-lg border border-slate-200">
+      <table class="min-w-full divide-y divide-slate-200 text-sm">
+        <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+          <tr>
+            <th class="px-3 py-2 font-medium">When</th>
+            <th class="px-3 py-2 font-medium">Agent alias</th>
+            <th class="px-3 py-2 font-medium">Created</th>
+            <th class="px-3 py-2 font-medium">Updated</th>
+            <th class="px-3 py-2 font-medium">Status</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          {% for log in logs %}
+          <tr class="hover:bg-slate-50/60">
+            <td class="px-3 py-2 text-xs text-slate-500">{{ log.created_at.strftime('%Y-%m-%d %H:%M') if log.created_at else '—' }}</td>
+            <td class="px-3 py-2 font-mono text-xs text-slate-700">{{ log.agent_alias or '—' }}</td>
+            <td class="px-3 py-2 text-slate-700">{{ log.skills_created }}</td>
+            <td class="px-3 py-2 text-slate-700">{{ log.skills_updated }}</td>
+            <td class="px-3 py-2">
+              {% if log.status == 'ok' %}
+              <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">ok</span>
+              {% else %}
+              <span class="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-700" title="{{ log.message }}">error</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="px-3 py-6 text-center text-sm text-slate-400">No imports yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.querySelectorAll('.copy-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var el = document.querySelector(btn.dataset.copy);
+      if (!el) return;
+      navigator.clipboard.writeText(el.innerText.trim()).then(function () {
+        var orig = btn.innerText;
+        btn.innerText = 'Copied!';
+        setTimeout(function () { btn.innerText = orig; }, 1500);
+      });
+    });
+  });
+</script>
+{% endblock %}
