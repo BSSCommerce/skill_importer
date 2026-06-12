@@ -23,6 +23,7 @@ router = APIRouter(prefix="/skill-importer", tags=["skill-importer"])
 
 
 def _render(request: Request, db: Session, *, new_raw_key: str | None = None):
+    user = get_current_user_from_request(db, request)
     keys = (
         db.query(SkillImportApiKey)
         .order_by(SkillImportApiKey.created_at.desc())
@@ -47,6 +48,8 @@ def _render(request: Request, db: Session, *, new_raw_key: str | None = None):
         name="skill_importer.html",
         context={
             "request": request,
+            "user": user,
+            "active_page": "community_skill_importer",
             "keys": keys,
             "logs": logs,
             "agent_aliases": agent_aliases,
